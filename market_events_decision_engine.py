@@ -72,36 +72,6 @@ def get_token_ids(condition_id: str):
     return yes_token
 
 
-# fetch prices over last 31 days (of YES)
-def get_history(condition_id : str):
-    token_id = get_token_ids(condition_id)
-    url = "https://clob.polymarket.com/prices-history"
-
-    end = int(datetime.now(timezone.utc).timestamp())
-    start = int((datetime.now(timezone.utc) - timedelta(days=31)).timestamp())
-
-    params = {
-        "market": token_id,
-        "startTs": start,
-        "endTs": end,
-        "interval": "1d", 
-        "fidelity": 60
-    }
-
-    res = requests.get(url, params=params)
-    history = res.json()["history"]
-    return history
-
-# calculate differences between prices
-def get_differences(condition_id : str):
-    history = get_history(condition_id)
-    prices = [point["p"] for point in history]
-    price_changes = np.diff(prices)
-    std_dev = np.std(price_changes)
-
-    return std_dev # desired metric
-
-
 # ------------ Sorting Output (Formatting for Telegram Bot) ---------------
 
 # Sort contracts by expiry date (list nearest ones first, include contracts expiring now - 72H in future)
@@ -116,15 +86,105 @@ def get_differences(condition_id : str):
 # ------------ Event Driven Pings --------------- #
 # Send pings if: volume or price spikes meaningfully
 
+# fetches 31-day daily price history from CLOB for a given YES token — used by event_driven_pings for z-score baseline
+def get_history(token_id: str):
+    end = int(datetime.now(timezone.utc).timestamp())
+    start = int((datetime.now(timezone.utc) - timedelta(days=31)).timestamp())
+
+    res = requests.get(
+        "https://clob.polymarket.com/prices-history",
+        params={"market": token_id, "startTs": start, "endTs": end, "interval": "1d", "fidelity": 60}
+    )
+    return res.json().get("history", [])
+
+# returns std dev of daily price changes for a market — used by event_driven_pings to compute z-score
+def get_differences(token_id: str):
+    history = get_history(token_id)
+    if not history:
+        return 0.01
+    prices = [point["p"] for point in history]
+    price_changes = np.diff(prices)
+    return np.std(price_changes)
+
 def event_driven_pings():
-    # get the volume of chosen market
-    vol = ...
-    if vol >= 1000000 and vol < 10000000:
-        ...
-    elif vol >= 10000000 and vol < 100000000:
-        ...
-    elif vol >= 100000000:
-        ...
+    for market in markets:
+        # Filter: skip markets below $1M all-time volume
+        vol = float(market.get("volume") or 0)
+        if vol < 1_000_000:
+            continue
+
+        if vol >= 100_000_000:
+            threshold = 0.0025
+        elif vol >= 10_000_000:
+            threshold = 0.025
+        else:
+            threshold = 0.05
+
+        # Parse YES token ID from clobTokenIds
+        token_ids = market.get("clobTokenIds")
+        if isinstance(token_ids, str):
+            token_ids = eval(token_ids)
+        if not token_ids:
+            continue
+        token_id = token_ids[0]
+
+        # Fetch 2h price history from CLOB
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(hours=2)
+        res = requests.get(
+            "https://clob.polymarket.com/prices-history",
+            params={
+                "market": token_id,
+                "startTs": int(start.timestamp()),
+                "endTs": int(end.timestamp()),
+                "fidelity": 1,
+            }
+        )
+        history = res.json().get("history", [])
+        if len(history) < 2:
+            continue
+
+        # Calculate price delta over 2h window
+        price_start = history[0]["p"]
+        price_end   = history[-1]["p"]
+        delta = abs(price_end - price_start)
+
+        if delta < threshold:
+            continue
+
+        # Z-score label
+        std_dev = get_differences(token_id)
+        today_move = price_end - price_start
+        z = abs(today_move) / max(std_dev, 0.01)
+        if z >= 2:
+            z_label = "Major movement (z>2)"
+        elif z >= 1:
+            z_label = "Notable movement (1<z<2)"
+        else:
+            z_label = "Normal movement (z<1)"
+
+        # Format and send alert
+        direction = "up" if price_end > price_start else "down"
+        timestamp = datetime.now(timezone.utc).strftime("%-d %b, %H:%M ET")
+        question  = market.get("question", "")
+        curr_pct  = round(price_end * 100)
+        prev_pct  = round(price_start * 100)
+        vol_24h   = market.get("volume24hr", "N/A")
+        oi        = market.get("openInterest", "N/A")
+        end_date  = market.get("endDate", "")[:10]
+        slug      = market.get("slug", "")
+
+        text = (
+            f"*PREDICTION MARKET ALERT*\n"
+            f"{timestamp} — Polymarket\n"
+            f"{question}\n"
+            f"Yes {curr_pct}% now, from {prev_pct}% 2h ago ({direction})\n"
+            f"${vol_24h} 24h vol\n"
+            f"${oi} OI · {z_label}\n"
+            f"resolves {end_date}\n"
+            f"polymarket.com/event/{slug}"
+        )
+        send_telegram_message(text)
 
 # ----------- Daily Digest ---------------- #
 # Selected markets, give contract name, price / price 24h ago, vol / vol 24h ago, resolution date, link -- SUBJECT TO CHANGE
@@ -217,3 +277,5 @@ Jobless claims above 250k? Normal movement (z<1)
 send_telegram_message(text)
 
 # ---------- Scheduling with AWS Lambda ------------- #
+
+event_driven_pings()  # uncomment to test locally; remove before Lambda deployment
