@@ -272,13 +272,13 @@ def get_history(condition_id: str):
     url = "https://clob.polymarket.com/prices-history"
 
     end = int(datetime.now(timezone.utc).timestamp())
-    start = int((datetime.now(timezone.utc) - timedelta(minutes=10)).timestamp())
+    start = int((datetime.now(timezone.utc) - timedelta(hours=2)).timestamp())
 
     params = {
         "market": token_id,
         "startTs": start,
         "endTs": end,
-        "fidelity": 1,  # 1-minute granularity
+        "fidelity": 30,  # 30-minute granularity
     }
 
     res = requests.get(url, params=params)
@@ -288,19 +288,22 @@ def get_history(condition_id: str):
     return history
 
 
-moved_contracts = {}
+moved_contracts = set()
 for slug, contract in sorted_contracts:
     history = get_history(contract.cond_id)
 
     if len(history) < 2:
         raise ValueError("Not enough price history returned.")
 
+    print(contract.title)
     prev = history[0]["p"]   # Price from ~10 minutes ago
+    print(prev)
     now = history[-1]["p"]   # Most recent price
-
+    print(now)
+    
     # Define whether or not the contract has moved
     if contract.lifetime_vol >= 100000 and contract.lifetime_vol <= 1000000:
-        if (abs(prev - now) > 0.05):
+        if (abs(prev - now) > 0.03):
             moved_contracts.add(contract)
     elif contract.lifetime_vol >= 1000000 and contract.lifetime_vol <= 10000000:
         if (abs(prev - now) > 0.025):
@@ -310,10 +313,8 @@ for slug, contract in sorted_contracts:
             moved_contracts.add(contract)
 
 # Sort by date
-items = moved_contracts.items()
-
 sorted_contracts = sorted(
-    items,
+    moved_contracts,
     key=lambda item: item[1].expiry_date
 )
 
