@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.zip
+*.so
+calendar_updates/package/
+calendar_updates/deploy/
+calendar_updates/slim_package/
+event_pings/deploy/
+webhook/deploy/
+.env
