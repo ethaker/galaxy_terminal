@@ -9,3 +9,4 @@ calendar_updates/slim_package/
 event_pings/deploy/
 webhook/deploy/
 .env
+.DS_Store
