@@ -105,9 +105,8 @@ def format_alert(market, prev_price, move):
         "*MARKET ALERT*",
         f"_{date_str} — Polymarket_",
         "",
-        md_escape(market["title"]),
+        f"[{md_escape(market['title'])}](https://polymarket.com/event/{slug})",
         f"{direction} Yes {yes_str} \\({move_str}\\)  _\\|  {vol_str} 24h vol_",
-        f"[polymarket\\.com/event/{md_escape(slug)}](https://polymarket.com/event/{slug})",
     ])
 
 # ------------ Send to Telegram ------------ #
