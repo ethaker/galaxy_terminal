@@ -14,9 +14,9 @@ GAMMA_BASE = "https://gamma-api.polymarket.com"
 
 # Volume-tiered movement thresholds
 THRESHOLDS = [
-    (10_000_000, 0.03),
-    (1_000_000,  0.04),
-    (100_000,    0.05),
+    (10_000_000, 0.025),
+    (1_000_000,  0.035),
+    (100_000,    0.04),
 ]
 
 def get_threshold(lifetime_vol):
