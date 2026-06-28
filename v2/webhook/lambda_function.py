@@ -112,6 +112,16 @@ def handle_remove(chat_id, args):
     reply(chat_id, f"Removed from whitelist")
 
 
+def handle_thresholds(chat_id):
+    reply(chat_id, (
+        "*Alert thresholds:*\n\n"
+        "• >$10M lifetime vol — move \\>2\\.5%\n"
+        "• $1M–$10M lifetime vol — move \\>3\\.5%\n"
+        "• $100k–$1M lifetime vol — move \\>4\\.0%\n"
+        "• <$100k — no alerts"
+    ))
+
+
 def handle_list(chat_id):
     whitelist = load_whitelist()
     if not whitelist:
@@ -144,6 +154,8 @@ def lambda_handler(event, context):
             handle_remove(chat_id, args)
         elif command == "/list":
             handle_list(chat_id)
+        elif command == "/thresholds":
+            handle_thresholds(chat_id)
 
     except Exception as e:
         print(f"Error: {e}")
