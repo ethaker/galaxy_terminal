@@ -115,10 +115,10 @@ def handle_remove(chat_id, args):
 def handle_thresholds(chat_id):
     reply(chat_id, (
         "*Alert thresholds:*\n\n"
-        "• >$10M lifetime vol — move \\>2\\.5%\n"
+        "• \\>$10M lifetime vol — move \\>2\\.5%\n"
         "• $1M–$10M lifetime vol — move \\>3\\.5%\n"
         "• $100k–$1M lifetime vol — move \\>4\\.0%\n"
-        "• <$100k — no alerts"
+        "• \\<$100k — no alerts"
     ))
 
 
